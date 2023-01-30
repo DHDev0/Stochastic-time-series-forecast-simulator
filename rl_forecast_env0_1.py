@@ -68,6 +68,8 @@ class forecast_crypto(gym.Env):
         self.action_space = spaces.Discrete(len(self.bound))
         self._action_to_direction = dict(zip(list(range(len(self.bound))),self.bound))
 
+        #################### Database creation / update generator ######################################
+        
     def interval_generator(self,interval):
         value, unit = int(interval[:-1]), interval[-1] #check make global
         if unit == 'm': return timedelta(minutes=value)
