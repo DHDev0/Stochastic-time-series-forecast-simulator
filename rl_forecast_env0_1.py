@@ -33,7 +33,9 @@ class forecast_crypto(gym.Env):
         self.table_content = ("open_time", "open", "high", "low", "close", "volume", "close_time", "qav", "num_trades", "taker_base_vol", "taker_quote_vol", "ignore")
         interval = ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h","1d", "3d", "1w", "1M"]
         self.interval = interval[5]
-        dataset = self.generate_dataset(database_name = self.database_name,
+        
+        db = Database_build()
+        dataset = db.generate_dataset(database_name = self.database_name,
                                         dataset_name = self.dataset_name,
                                         table_content = self.table_content, 
                                         interval = self.interval,
@@ -49,27 +51,124 @@ class forecast_crypto(gym.Env):
         obs, targ = None , None
         for i,ii in zip(dataset[1:],dataset[:-1]):
             if obs is None:
-                obs , targ = self.concatenation(i,ii)
+                obs , targ = db.concatenation(i,ii)
             else:
-                update_obs , update_targ = self.concatenation(i,ii)
+                update_obs , update_targ = db.concatenation(i,ii)
                 obs = np.vstack((obs, update_obs))
                 targ = np.vstack((targ, update_targ))
 
-        self.bound = self.find_bound(obs[:,self.computed_indice],max_action_space_size = self.max_action_space_size)
-        if self.mode == "training":
-            self.dataset_obs = obs[:len(obs)*0.95]
-            self.dataset_targ = targ[:len(obs)*0.95]
-        if self.mode == "validation":
-            self.dataset_obs = obs[len(obs)*0.95:]
-            self.dataset_targ = targ[len(obs)*0.95:]
+        self.bound = db.find_bound(obs[:,self.computed_indice],max_action_space_size = self.max_action_space_size)
+        # if self.mode == "training":
+        #     self.dataset_obs = obs[:int(len(obs)*0.95)]
+        #     self.dataset_targ = targ[:int(len(obs)*0.95)]
+        # if self.mode == "validation":
+        #     self.dataset_obs = obs[int(len(obs)*0.95):]
+        #     self.dataset_targ = targ[int(len(obs)*0.95):]
+        self.dataset_obs = obs
+        self.dataset_targ = targ
 
         obs_array = np.array([np.finfo(np.float32).max for i in range(len(obs[0]))])
         self.observation_space = spaces.Box(-obs_array, obs_array, dtype=np.float32)
         self.action_space = spaces.Discrete(len(self.bound))
         self._action_to_direction = dict(zip(list(range(len(self.bound))),self.bound))
 
-        #################### Database creation / update generator ######################################
+    
+##################################### gym mechanism ##################################################
+     
+    def _get_obs(self):
+            self.observation = self.dataset_obs[self.index + self.origin]
+            return self.observation.astype(np.float32)
         
+            
+    def reset(self, seed=None, options=None):
+            super().reset(seed=seed)
+            self.index = int(self.np_random.integers(0, len(self.dataset_obs)-self.window_size, size=1, dtype=np.int64))
+            self.origin = 0
+            observation = self._get_obs()
+            return observation, {}    
+        
+        
+    def step(self, action):
+            act = self._action_to_direction[action]
+            if self.origin == 0:
+                self.predict_value = np.array([self.dataset_targ[self.index + self.origin,self.computed_indice] * act])
+            else:
+                self.predict_value = np.concatenate((self.predict_value, self.predict_value[-1] * act), axis=None)
+            self.actual_value = self.dataset_targ[self.index + 1 : self.index + self.origin + 2,self.computed_indice]
+            
+            difference = (self.predict_value/self.actual_value).mean()
+            self.origin += 1 
+            
+            reward = int((1 - abs(1 - difference))*100)#np.absolute(self.bound-x).argmin()  np.where(arr == 15)
+            terminated = self.origin == self.window_size
+            observation = self._get_obs()
+            info = {}
+
+            return observation, reward, terminated, False, info
+        
+
+    def init_render(self):
+        self.root = tk.Tk()
+        self.count = 0
+        x, y = [1, 2, 3] , [0, 0, 0]
+        self.figure,self.ax = plt.subplots()
+        self.ax.plot(x, y)
+        self.canvas = FigureCanvasTkAgg(self.figure, self.root)
+        self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        self.canvas.draw()
+        #keep windows in front
+        self.root.lift()
+        self.root.attributes('-topmost', True)
+        self.root.attributes('-topmost', False)
+        
+        self.root.update()
+        
+    def update_render(self, *time_serie):
+        #take unlimited number of 1d array
+        self.ax.clear()
+        hold_range_max , hold_data_max = 0 , 0
+        hold_range_min , hold_data_min = 0 , 0
+        self.ax = self.canvas.figure.axes[0]
+        for i in time_serie:
+            range_v = np.arange(0, len(i), dtype=int)
+            data_v = i
+            self.ax.plot(range_v, data_v)
+            hold_range_max = hold_range_max if max(range_v) < hold_range_max else max(range_v)
+            hold_data_max  = hold_data_max if max(data_v) < hold_data_max else max(data_v)
+            hold_range_min = hold_range_min if min(range_v) > hold_range_min else min(range_v)
+            hold_data_min  = hold_data_min if min(data_v) > hold_data_min else min(data_v)
+        self.ax.xaxis.set_label_text("iteration")
+        self.ax.yaxis.set_label_text("price")
+        # self.ax.set_xlim(hold_range_min, hold_range_max)
+        # self.ax.set_ylim(hold_data_min, hold_data_max)   
+        self.canvas.draw()
+        self.root.update()
+
+        
+    def close_render(self):
+        self.root.destroy()
+
+    def render(self):
+        #call render after step
+        if self.render_mode == "human":
+            if self.render_origine == 0:
+                self.init_render()
+                self.render_origine += 1 
+            self.update_render(self.predict_value,self.actual_value)
+
+
+    def close(self):
+        if self.render_mode == "human":
+            self.close_render()
+        del self.dataset_obs
+        del self.dataset_targ
+
+
+
+class Database_build:
+    def __init__(self) -> None:
+        pass
+    
     def interval_generator(self,interval):
         value, unit = int(interval[:-1]), interval[-1] #check make global
         if unit == 'm': return timedelta(minutes=value)
@@ -103,7 +202,7 @@ class forecast_crypto(gym.Env):
         return time_now - last_time > interval_dist*2 #check make global   minimum batch betfore update
         
     def connect_to_database(self,database_name : str = "btcusdt"):
-        return sqlite3.connect(f'{database_name}.db')
+        return sqlite3.connect(f'C:\\Users\\ddery\\anaconda3\\envs\\pentos\\Lib\\site-packages\\gym\\envs\\forecast\\{database_name}.db')
         
     def disconnect_to_database(self,conn):
         conn.close()
@@ -170,7 +269,10 @@ class forecast_crypto(gym.Env):
             base_data = self.klinedata(last_date = None, 
                                        interval = interval,
                                        symbole = symbole)
-            self.update_database(base_data)
+            self.update_database(conn, 
+                                 base_data, 
+                                 table_content, 
+                                 dataset_name)
             del base_data
             
         elif self.min_distance_time(recent_row, interval):
@@ -221,97 +323,6 @@ class forecast_crypto(gym.Env):
                 s.plot()
                 return bound
         raise Exception(f"can't find {max_action_space_size} or less bound of action")
-    
-##################################### gym mechanism ##################################################
-     
-    def _get_obs(self):
-            self.observation = self.dataset_obs[self.index + self.origin]
-            return self.observation.astype(np.float32)
-        
-            
-    def reset(self, seed=None, options=None):
-            super().reset(seed=seed)
-            self.index = int(self.np_random.integers(0, len(self.dataset_obs)-self.window_size, size=1, dtype=np.int64))
-            self.origin = 0
-            observation = self._get_obs()
-            return observation, {}    
-        
-        
-    def step(self, action):
-            act = self._action_to_direction[action]
-            if self.origin == 0:
-                self.predict_value = np.array([self.dataset_targ[self.index + self.origin,self.computed_indice] * act])
-            else:
-                self.predict_value = np.concatenate((self.predict_value, self.predict_value[-1] * act), axis=None)
-            self.actual_value = self.dataset_targ[self.index + 1 : self.index + self.origin + 2,self.computed_indice]
-            
-            difference = (self.predict_value/self.actual_value).mean()
-            self.origin += 1 
-            
-            reward = int((100 - (abs(1 - difference)*100))/10)#np.absolute(self.bound-x).argmin()  np.where(arr == 15)
-            terminated = self.origin == self.window_size or not (0.95 < difference < 1.05 )
-            observation = self._get_obs()
-            info = {}
-
-            return observation, reward, terminated, False, info
-        
-
-    def init_render(self):
-        self.root = tk.Tk()
-        self.count = 0
-        x, y = [1, 2, 3] , [0, 0, 0]
-        self.figure,self.ax = plt.subplots()
-        self.ax.plot(x, y)
-        self.canvas = FigureCanvasTkAgg(self.figure, self.root)
-        self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        self.canvas.draw()
-        #keep windows in front
-        self.root.lift()
-        self.root.attributes('-topmost', True)
-        self.root.attributes('-topmost', False)
-        
-        self.root.update()
-        
-    def update_render(self, *time_serie):
-        #take unlimited number of 1d array
-        self.ax.clear()
-        hold_range_max , hold_data_max = 0 , 0
-        hold_range_min , hold_data_min = 0 , 0
-        self.ax = self.canvas.figure.axes[0]
-        for i in time_serie:
-            range_v = np.arange(0, len(i), dtype=int)
-            data_v = i
-            self.ax.plot(range_v, data_v)
-            hold_range_max = hold_range_max if max(range_v) < hold_range_max else max(range_v)
-            hold_data_max  = hold_data_max if max(data_v) < hold_data_max else max(data_v)
-            hold_range_min = hold_range_min if min(range_v) > hold_range_min else min(range_v)
-            hold_data_min  = hold_data_min if min(data_v) > hold_data_min else min(data_v)
-        self.ax.xaxis.set_label_text("iteration")
-        self.ax.yaxis.set_label_text("price")
-        # self.ax.set_xlim(hold_range_min, hold_range_max)
-        # self.ax.set_ylim(hold_data_min, hold_data_max)   
-        self.canvas.draw()
-        self.root.update()
-
-        
-    def close_render(self):
-        self.root.destroy()
-
-    def render(self):
-        #call render after step
-        if self.render_mode == "human":
-            if self.render_origine == 0:
-                self.init_render()
-                self.render_origine += 1 
-            self.update_render(self.predict_value,self.actual_value)
-
-
-    def close(self):
-        if self.render_mode == "human":
-            self.close_render()
-        del self.dataset_obs
-        del self.dataset_targ
-
 
 
 ##### test code
