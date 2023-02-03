@@ -202,7 +202,7 @@ class Database_build:
         return time_now - last_time > interval_dist*2 #check make global   minimum batch betfore update
         
     def connect_to_database(self,database_name : str = "btcusdt"):
-        return sqlite3.connect(f'C:\\Users\\ddery\\anaconda3\\envs\\pentos\\Lib\\site-packages\\gym\\envs\\forecast\\{database_name}.db')
+        return sqlite3.connect(f'{database_name}.db')
         
     def disconnect_to_database(self,conn):
         conn.close()
