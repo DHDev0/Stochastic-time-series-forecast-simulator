@@ -26,7 +26,7 @@ class forecast_crypto(gym.Env):
             
         self.render_mode = render_mode
         
-        self.future_window = 24  # The number of step you want to predict ahead
+        self.future_window = 5  # The number of step you want to predict ahead
         self.number_of_past_observation = 10
         
         self.store_reconstruct_predict = None
@@ -114,8 +114,12 @@ class forecast_crypto(gym.Env):
         return slicer
     
     def reward_function(self,target : np.array,prediction: np.array):
-        reward = 1 - ( np.abs(prediction - target)/ ((np.abs(target)+np.abs(prediction))/2) )#SMAPE
-        return int(np.exp(reward * np.log(100)))
+        # reward = 1 - ( np.abs(prediction - target)/ ((np.abs(target)+np.abs(prediction))/2) )#SMAPE
+        # return int(np.exp(reward * np.log(100)))
+        difference = prediction/target    
+        difference = max(min(difference,1.99),0.01)
+        reward = int((1 - abs(1 - difference))*100)
+        return reward
 ##################################### gym mechanism ##################################################        
             
     def reset(self, seed=None, options=None):#to fix
@@ -162,7 +166,7 @@ class forecast_crypto(gym.Env):
         
         #observation
         self.simulation_observation[-1 , self.crypto_index , self.value_index] =  act
-        observation = self.simulation_observation[self.index - self.number_of_past_observation + self.origin : self.index + self.origin ].astype(np.float32)
+        observation = self.simulation_observation[self.origin +1 :  ].astype(np.float32)
 
         # reward
         if self.mode == "live":
@@ -181,7 +185,7 @@ class forecast_crypto(gym.Env):
 
         info = {}
 
-        return observation, reward, terminated, False, info
+        return observation, reward, terminated, info
         
 
     def init_render(self):
