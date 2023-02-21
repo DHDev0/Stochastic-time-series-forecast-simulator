@@ -21,13 +21,17 @@ class forecast_crypto(gym.Env):
     
     def __init__(self, 
                  render_mode=None,
-                 symb='BTCUSDT', 
-                 mode = "training"):
+                 symb=['ETHUSDT','BTCUSDT','DOGEUSDT'], 
+                 mode = "training",
+                 future_window = 5,
+                 number_of_past_observation = 10,
+                 computed_asset = [ 0 , 1 , 2],
+                 computed_value = [ 1 , 2 , 3 , 4]):
             
         self.render_mode = render_mode
         
-        self.future_window = 5  # The number of step you want to predict ahead
-        self.number_of_past_observation = 10
+        self.future_window = future_window  # The number of step you want to predict ahead
+        self.number_of_past_observation = number_of_past_observation
         
         self.store_reconstruct_predict = None
         self.render_origine = 0
@@ -41,8 +45,9 @@ class forecast_crypto(gym.Env):
         
         self.observation_indice = [ i for i in range(9)]
         
-        self.computed_indice = [ 1 , 2 , 3 , 4]
-        self.max_action_space_size = 100
+        self.computed_value = [ 1 , 2 , 3 , 4]
+        self.computed_asset = computed_asset
+        self.max_action_space_size = 700
         
         self.mode = mode
         
@@ -84,15 +89,20 @@ class forecast_crypto(gym.Env):
         
 
         #find action space of indice you want to compute/predict
-        bound = []
-        for i in self.computed_indice:
-            bound += db.find_bound(self.dataset_obs[...,self.computed_indice],max_action_space_size = self.max_action_space_size)
+        # bound = []
+        # for i in self.computed_value:
+        #     bound += db.find_bound(self.dataset_obs[...,self.computed_value],max_action_space_size = self.max_action_space_size)
+        bound = [0.64, 0.709, 0.738, 0.746, 0.747, 0.78, 0.802, 0.811, 0.82, 0.823, 0.828, 0.831, 0.844, 0.847, 0.848, 0.849, 0.85, 0.851, 0.854, 0.858, 0.863, 0.867, 0.868, 0.869, 0.87, 0.873, 0.875, 0.876, 0.88, 0.881, 0.882, 0.883, 0.884, 0.886, 0.887, 0.888, 0.889, 0.89, 0.893, 0.894, 0.895, 0.897, 0.898, 0.899, 0.9, 0.901, 0.902, 0.903, 0.904, 0.905, 0.906, 0.907, 0.908, 0.909, 0.91, 0.911, 0.912, 0.913, 0.914, 0.915, 0.916, 0.917, 0.918, 0.919, 0.92, 0.921, 0.922, 0.923, 0.924, 0.925, 0.926, 0.927, 0.928, 0.929, 0.93, 0.931, 0.932, 0.933, 0.934, 0.935, 0.936, 0.937, 0.938, 0.939, 0.94, 0.941, 0.942, 0.943, 0.944, 0.945, 0.946, 0.947, 0.948, 0.949, 0.95, 0.951, 0.952, 0.953, 0.954, 0.955, 0.956, 0.957, 0.958, 0.959, 0.96, 0.961, 0.962, 0.963, 0.964, 0.965, 0.966, 0.967, 0.968, 0.969, 0.97, 0.971, 0.972, 0.973, 0.974, 0.975, 0.976, 0.977, 0.978, 0.979, 0.98, 0.981, 0.982, 0.983, 0.984, 0.985, 0.986, 0.987, 0.988, 0.989, 0.99, 0.991, 0.992, 0.993, 0.994, 0.995, 0.996, 0.997, 0.998, 1.002, 1.003, 1.004, 1.005, 1.006, 1.007, 1.008, 1.009, 1.01, 1.011, 1.012, 1.013, 1.014, 1.015, 1.016, 1.017, 1.018, 1.019, 1.02, 1.021, 1.022, 1.023, 1.024, 1.025, 1.026, 1.027, 1.028, 1.029, 1.03, 1.031, 1.032, 1.033, 1.034, 1.035, 1.036, 1.037, 1.038, 1.039, 1.04, 1.041, 1.042, 1.043, 1.044, 1.045, 1.046, 1.047, 1.048, 1.049, 1.05, 1.051, 1.052, 1.053, 1.054, 1.055, 1.056, 1.057, 1.058, 1.059, 1.06, 1.061, 1.062, 1.063, 1.064, 1.065, 1.066, 1.067, 1.068, 1.069, 1.07, 1.071, 1.072, 1.073, 1.074, 1.075, 1.076, 1.077, 1.078, 1.079, 1.08, 1.081, 1.082, 1.083, 1.084, 1.085, 1.086, 1.087, 1.088, 1.089, 1.09, 1.091, 1.092, 1.093, 1.094, 1.095, 1.096, 1.097, 1.098, 1.099, 1.1, 1.101, 1.102, 1.103, 1.105, 1.107, 1.108, 1.109, 1.11, 1.111, 1.112, 1.113, 1.114, 1.115, 1.116, 1.117, 1.118, 1.119, 1.12, 1.121, 1.122, 1.123, 1.124, 1.125, 1.126, 1.129, 1.13, 1.131, 1.133, 1.135, 1.136, 1.137, 1.138, 1.139, 1.14, 1.141, 1.144, 1.145, 1.149, 1.15, 1.151, 1.152, 1.154, 1.155, 1.157, 1.159, 1.161, 1.163, 1.164, 1.166, 1.168, 1.17, 1.178, 1.18, 1.183, 1.185, 1.195, 1.204, 1.205, 1.21, 1.212, 1.228, 1.233, 1.234, 1.24, 1.242, 1.249, 1.252, 1.261, 1.308, 1.33]
         self.bound = sorted(list(set(bound)))
         print("action space size: ",len(self.bound))
         print("actual action space: ",self.bound)   
         
+        #TO FIX WITH CHOICE OF DATA AUGMENTATION
+        obs_sh = list(full_observation[:self.number_of_past_observation,...].shape)
+        obs_sh[1] = int(obs_sh[1]*6)
+        obs_sh = tuple(obs_sh)
         
-        obs_array = np.full(full_observation[:self.number_of_past_observation,...].shape, np.finfo(np.float32).max) #fix [0] for the size of the batch observation
+        obs_array = np.full(obs_sh, np.finfo(np.float32).max) #fix [0] for the size of the batch observation
         self.observation_space = spaces.Box(-obs_array, obs_array, dtype=np.float32)
         self.action_space = spaces.Discrete(len(self.bound))
         self._action_to_direction = dict(zip(list(range(len(self.bound))),self.bound))
@@ -118,7 +128,7 @@ class forecast_crypto(gym.Env):
         # return int(np.exp(reward * np.log(100)))
         difference = prediction/target    
         difference = max(min(difference,1.99),0.01)
-        reward = int((1 - abs(1 - difference))*100)
+        reward = np.round((1 - abs(1 - difference))*100,1)
         return reward
 ##################################### gym mechanism ##################################################        
             
@@ -132,10 +142,11 @@ class forecast_crypto(gym.Env):
             if self.mode == "live":
                 self.index = len(self.dataset_obs)
             else:
+                
                 min_bound = max(self.number_of_past_observation*8,self.number_of_past_observation+100)
                 self.index = int(self.np_random.integers(min_bound, len(self.dataset_obs)-self.future_window , size=1, dtype=np.int64))
             
-            self.walk = walker(list(range(len(self.symb))),self.computed_indice)
+            self.walk = walker(self.computed_asset,self.computed_value)
             
             #observation
             self.simulation_observation = self.dataset_obs[self.index - self.number_of_past_observation : self.index ]            
@@ -167,12 +178,12 @@ class forecast_crypto(gym.Env):
         #observation
         self.simulation_observation[-1 , self.crypto_index , self.value_index] =  act
         observation = self.simulation_observation[self.origin +1 :  ].astype(np.float32)
+        self.simulation_observation_without_transform[-1 , self.crypto_index , self.value_index] =  self.simulation_observation_without_transform[-2 , self.crypto_index , self.value_index]*act
 
         # reward
         if self.mode == "live":
             reward = 0
         else:
-            self.simulation_observation_without_transform[-1 , self.crypto_index , self.value_index] =  self.simulation_observation_without_transform[-2 , self.crypto_index , self.value_index]*act
             self.predict_value = self.simulation_observation_without_transform[-1 , self.crypto_index , self.value_index]
             self.actual_value =  self.dataset_targ[self.index + self.origin + 1 , self.crypto_index , self.value_index]           
             reward = self.reward_function(self.actual_value,self.predict_value)    
@@ -204,15 +215,31 @@ class forecast_crypto(gym.Env):
         
         self.root.update()
         
-    def update_render(self, *time_serie):
+    def update_render(self, *time_serie, mode = "table"):
         #take unlimited number of 1d array
         self.ax.clear()
-        self.ax = self.canvas.figure.axes[0]
-        for data_v in time_serie:
-            range_v = np.tile(np.arange(data_v.shape[-1], dtype=int), data_v.shape[:-1]+(1,))    
-            self.ax.plot(range_v, data_v)
-        self.ax.xaxis.set_label_text("iteration")
-        self.ax.yaxis.set_label_text("price") 
+        if mode == "plot":
+        # # create plot
+            self.ax = self.canvas.figure.axes[0]
+            for data_v in time_serie:
+                range_v = np.tile(np.arange(data_v.shape[-1], dtype=int), data_v.shape[:-1]+(1,))    
+                self.ax.plot(range_v, data_v)
+            self.ax.xaxis.set_label_text("iteration")
+            self.ax.yaxis.set_label_text("price") 
+    
+        if mode == "table":
+        # # create table
+            self.ax.axis('off')
+            self.ax.axis('tight')
+            headers = [f"t_{i}" for i in range(len(time_serie[0]))]
+            # rows = [0] + [ "target " for i in range(len(time_serie) // 2)] + [ "prediction " for i in range(len(time_serie) // 2)]
+            table_data = [headers] + [i for i in time_serie]
+            the_table = self.ax.table(cellText=table_data, loc='center')#, rowLabels=rows,)
+            the_table.auto_set_font_size(False)
+            the_table.set_fontsize(8)
+            the_table.scale(1.5, 1.5)
+            self.figure.savefig('fox.png')
+        
         self.canvas.draw()
         self.root.update()
 
@@ -226,11 +253,15 @@ class forecast_crypto(gym.Env):
             if self.render_origine == 0:
                 self.init_render()
                 self.render_origine += 1 
-            prediction = self.simulation_observation[self.origin :].transpose(1,2,0)
-            target = self.dataset_targ[self.index - self.number_of_past_observation + self.origin : self.index + self.origin + 1 ].transpose(1,2,0)
-            prediction = tuple(i for i in prediction.reshape(prediction.shape[0]*prediction.shape[1],prediction.shape[2]))
-            target = tuple(i for i in target.reshape(target.shape[0]*target.shape[1],target.shape[2]))
-            overall = target+prediction
+            prediction = self.simulation_observation_without_transform[self.origin:,:,self.computed_value].transpose(1,2,0)
+            prediction = tuple(np.round(i,2) for i in prediction.reshape(prediction.shape[0]*prediction.shape[1],prediction.shape[2]))
+            overall = prediction
+            if self.mode == "live":
+                pass
+            else:
+                target = self.dataset_targ[self.index - self.number_of_past_observation + self.origin: self.index + self.origin + 1,:,self.computed_value ].transpose(1,2,0)
+                target = tuple(np.round(i,2) for i in target.reshape(target.shape[0]*target.shape[1],target.shape[2]))
+                overall = target+prediction
             self.update_render(*overall)
 
 
@@ -479,7 +510,6 @@ class Database_build:
                                                 symbole = symbole)
             time_difference = datetime.utcnow() - start_time
             dataset_refresh_needed = not time_difference <= self.interval_generator(interval)
-      
       
             
 class indicator:
