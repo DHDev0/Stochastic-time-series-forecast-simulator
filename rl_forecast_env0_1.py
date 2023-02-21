@@ -9,8 +9,8 @@ import pickle
 
 #lib to add
 import pandas as panda
-import gym
-from gym import spaces
+import gymnasium as gym
+from gymnasium import spaces
 import numpy as np
 import tkinter as tk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
